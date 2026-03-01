@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Next metro in...</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,700;1,400;1,700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600;1,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="masthead">
+    <div class="datetime" id="datetime" aria-live="polite">
+      <span class="datetime-date" id="datetime-date"></span>
+      <span class="datetime-time" id="datetime-time"></span>
+      <span class="datetime-incidents" id="masthead-incidents" aria-live="polite" hidden></span>
+      <!-- <span class="datetime-weather" id="masthead-weather" aria-hidden="true" hidden><span class="weather-icon" id="masthead-weather-icon" aria-hidden="true"></span><span class="weather-text" id="masthead-weather-text"></span></span> -->
+      <button type="button" class="datetime-flip-lights" id="theme-toggle" aria-label="Toggle dark mode"><span class="flip-lights-icon" id="flip-lights-icon" aria-hidden="true"></span><span class="flip-lights-text">FLIP THE LIGHTS</span></button>
+    </div>
+    <div class="headline-slide-wrap" id="headline-slide-wrap" aria-live="polite"><h1 class="headline" id="headline">Next metro in:</h1></div>
+    <div class="masthead-rule" aria-hidden="true">
+      <span class="masthead-rule-line"></span>
+      <span class="masthead-rule-pill" id="bg-slider-pill" role="slider" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Background hue slider" tabindex="0"></span>
+    </div>
+  </header>
+  <main class="page">
+    <div class="content">
+      <p class="lead">Share your location to see when the next trains leave from the station nearest you.</p>
+      <div class="actions">
+        <button type="button" class="btn-primary" id="allow-location" aria-label="Allow location access">Use my location</button>
+      </div>
+      <div class="result result--next-trains" id="result" aria-live="polite" hidden>
+        <div class="result-next-trains" id="result-next-trains" aria-label="Next trains at your station" hidden></div>
+        <div class="result-incidents" id="result-incidents" aria-label="Incidents list" hidden></div>
+      </div>
+      <div class="result result--error" id="result-error" aria-live="polite" hidden>
+        <p class="result-title">Location unavailable</p>
+        <p class="result-message" id="result-error-message"></p>
+        <button type="button" class="btn-secondary" id="try-again">Try again</button>
+      </div>
+    </div>
+  </main>
+  <script src="station-code-to-name-cache.js"></script>
+  <script src="script.js" defer></script>
+</body>
+</html>
