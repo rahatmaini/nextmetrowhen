@@ -12,23 +12,77 @@
 <body>
   <header class="masthead">
     <div class="datetime" id="datetime" aria-live="polite">
-      <span class="datetime-date" id="datetime-date"></span>
-      <span class="datetime-time" id="datetime-time"></span>
+      <div class="datetime-first-line">
+        <span class="current-station-name" id="current-station-name" aria-live="polite" hidden></span>
+      </div>
+      <div class="datetime-time-date-line">
+        <span class="datetime-date" id="datetime-date"></span>
+        <span class="datetime-sep" aria-hidden="true">·</span>
+        <span class="datetime-time" id="datetime-time"></span>
+      </div>
       <span class="datetime-incidents" id="masthead-incidents" aria-live="polite" hidden></span>
       <!-- <span class="datetime-weather" id="masthead-weather" aria-hidden="true" hidden><span class="weather-icon" id="masthead-weather-icon" aria-hidden="true"></span><span class="weather-text" id="masthead-weather-text"></span></span> -->
       <button type="button" class="datetime-flip-lights" id="theme-toggle" aria-label="Toggle dark mode"><span class="flip-lights-icon" id="flip-lights-icon" aria-hidden="true"></span><span class="flip-lights-text">FLIP THE LIGHTS</span></button>
     </div>
-    <div class="headline-slide-wrap" id="headline-slide-wrap" aria-live="polite"><h1 class="headline" id="headline">Next metro in:</h1></div>
+    <div class="masthead-right">
+      <div class="headline-slide-wrap" id="headline-slide-wrap" aria-live="polite"><h1 class="headline" id="headline">Next metro in:</h1></div>
+    </div>
     <div class="masthead-rule" aria-hidden="true">
       <span class="masthead-rule-line"></span>
-      <span class="masthead-rule-pill" id="bg-slider-pill" role="slider" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Background hue slider" tabindex="0"></span>
+      <button type="button" class="masthead-rule-caption" id="colorful-btn" aria-label="Change background to a random color">I'm Feeling Colorful</button>
     </div>
   </header>
   <main class="page">
+    <div class="wmata-map-wrap" aria-hidden="true">
+      <div class="wmata-map-viewport" id="wmata-map-viewport" role="img" aria-label="DC Metro system map">
+        <div class="wmata-map-inner" id="wmata-map-inner">
+          <svg class="wmata-map-svg" xmlns="http://www.w3.org/2000/svg" viewBox="-650 -450 1100 800" width="1100" height="800" aria-hidden="true">
+            <style>.metro-line{fill:none;stroke:currentColor;stroke-width:8;stroke-linejoin:round;stroke-linecap:round}.metro-car{opacity:0}</style>
+            <path class="metro-line" d="M -600 -60 L -570 -60 L -540 -60 L -510 -60 L -480 -60 L -450 -60 L -420 -60 L -390 -60 L -360 -60 L -330 -60 L -300 -30 L -270 0 L -240 0 L -210 0 L -180 0 L -150 0 L -120 0 L -90 0 L -60 0 L -30 0 L 0 0 L 20 20 L 50 20 L 80 20 L 110 20 L 140 20 L 170 20 L 200 20 L 230 20 L 260 20 L 290 20 L 320 20 L 350 20 L 380 20"/>
+            <path class="metro-line" d="M -360 0 L -330 0 L -300 0 L -270 0 L -240 0 L -210 0 L -180 0 L -150 0 L -120 0 L -90 0 L -60 0 L -30 0 L 0 0 L 20 20 L 50 20 L 80 20 L 110 20 L 140 20 L 170 20 L 200 20 L 230 20 L 260 -10 L 260 -40 L 260 -70 L 260 -100 L 260 -130"/>
+            <path class="metro-line" d="M -150 300 L -150 270 L -120 240 L -120 210 L -120 180 L -120 150 L -120 120 L -120 90 L -120 60 L -120 30 L -120 0 L -90 0 L -60 0 L -30 0 L 0 0 L 20 20 L 50 20 L 80 20 L 110 20 L 140 20 L 170 20 L 200 20 L 230 20 L 260 20 L 290 20 L 320 20 L 350 20 L 380 20"/>
+            <path class="metro-line" d="M -120 300 L -120 270 L -120 240 L -120 210 L -120 180 L -120 150 L -120 120 L -120 90 L -120 60 L 40 60 L 80 20 L 80 10 L 80 0 L 80 -30"/>
+            <path class="metro-line" d="M 290 80 L 260 80 L 230 80 L 200 80 L 170 80 L 140 80 L 110 80 L 80 50 L 80 20 L 80 10 L 80 0 L 80 -30 L 80 -60 L 80 -90 L 110 -120 L 140 -120 L 170 -120 L 200 -120 L 230 -120 L 260 -120 L 290 -120"/>
+            <path class="metro-line" d="M -120 -420 L -90 -390 L -60 -360 L -60 -330 L -60 -300 L -60 -270 L -60 -240 L -60 -210 L -60 -180 L -60 -150 L -60 -120 L -60 -90 L -60 -60 L -30 -30 L 0 0 L 80 0 L 110 0 L 140 0 L 170 -30 L 170 -60 L 170 -90 L 170 -120 L 170 -150 L 170 -180 L 170 -210 L 170 -240 L 170 -270"/>
+            <g class="metro-cars" aria-hidden="true">
+              <circle class="metro-car metro-car--1" r="5" cx="-420" cy="-60"/>
+              <circle class="metro-car metro-car--2" r="5" cx="-180" cy="0"/>
+              <circle class="metro-car metro-car--3" r="5" cx="80" cy="20"/>
+              <circle class="metro-car metro-car--4" r="5" cx="260" cy="20"/>
+              <circle class="metro-car metro-car--5" r="5" cx="260" cy="-70"/>
+              <circle class="metro-car metro-car--6" r="5" cx="-120" cy="150"/>
+              <circle class="metro-car metro-car--7" r="5" cx="-30" cy="0"/>
+              <circle class="metro-car metro-car--8" r="5" cx="140" cy="20"/>
+              <circle class="metro-car metro-car--9" r="5" cx="80" cy="-60"/>
+              <circle class="metro-car metro-car--10" r="5" cx="200" cy="-120"/>
+              <circle class="metro-car metro-car--11" r="5" cx="-60" cy="-180"/>
+              <circle class="metro-car metro-car--12" r="5" cx="80" cy="0"/>
+              <circle class="metro-car metro-car--13" r="5" cx="-120" cy="60"/>
+              <circle class="metro-car metro-car--14" r="5" cx="170" cy="-90"/>
+              <circle class="metro-car metro-car--15" r="5" cx="230" cy="80"/>
+            </g>
+          </svg>
+        </div>
+      </div>
+    </div>
     <div class="content">
-      <p class="lead">Share your location to see when the next trains leave from the station nearest you.</p>
+      <p class="lead">Find the nearest station to you</p>
       <div class="actions">
         <button type="button" class="btn-primary" id="allow-location" aria-label="Allow location access">Use my location</button>
+      </div>
+      <div class="or-divider" aria-hidden="true">
+        <span class="or-divider-line"></span>
+        <span class="or-divider-caption">OR</span>
+        <span class="or-divider-line"></span>
+      </div>
+      <div class="station-picker">
+        <p class="station-picker-label">Pick a metro station to see train times for:</p>
+        <div class="station-picker-row">
+          <select id="station-select" class="station-select" aria-label="Choose a metro station">
+            <option value="">Select a station…</option>
+          </select>
+          <button type="button" class="btn-primary btn-check" id="check-station">Check</button>
+        </div>
       </div>
       <div class="result result--next-trains" id="result" aria-live="polite" hidden>
         <div class="result-next-trains" id="result-next-trains" aria-label="Next trains at your station" hidden></div>

@@ -4,6 +4,9 @@
   var userLocation = null;
   var nearestStation = null;
   var viewMode = 'trains';
+  /** Headline for trains view: "Next metro in:" or "Next metro is:" when first train has non-numeric status */
+  var trainsViewHeadline = 'Next metro in:';
+  var trainPollIntervalId = null;
   var incidentsList = [];
   var WMATA_API_KEY = '68e098225b2a4dc6b17f3a0cd74bc07e';
   var stationsCache = null;
@@ -11,6 +14,50 @@
   var DEFAULT_WEATHER_LON = -77.0369;
   /** Station code → name. Cached in station-code-to-name-cache.js, no API call for train destination names. */
   var stationCodeToName = window.STATION_CODE_TO_NAME || {};
+
+  /** SVG-friendly coordinates for each station code (for drawing the metro map). */
+  var STATION_COORDINATES = {
+    A01: [0, 0], A02: [-0.5, -0.5], A03: [-1, -1], A04: [-2, -2], A05: [-5, -5], A06: [-10, -10], A07: [-25, -25],
+    A08: [-50, -50], A09: [-100, -100], A10: [-200, -200], A11: [-300, -300], A12: [-400, -400], A13: [-500, -500],
+    A14: [-600, -600], A15: [-700, -700],
+    B01: [100, 100], B02: [150, 150], B03: [200, 200], B04: [300, 300], B05: [400, 400], B06: [500, 500], B07: [600, 600],
+    B08: [700, 700], B09: [800, 800], B10: [900, 900], B11: [1000, 1000], B35: [200, 200],
+    C01: [0, 0], C02: [-25, 0], C03: [-50, 0], C04: [-100, 0], C05: [-200, 0], C06: [150, 25], C07: [150, 50], C08: [150, 75],
+    C09: [150, 100], C10: [150, 150], C11: [150, 200], C12: [150, 250], C13: [150, 300], C14: [150, 350], C15: [150, 400],
+    D01: [50, 0], D02: [100, 0], D03: [150, 0], D04: [200, 0], D05: [250, 0], D06: [300, 0], D07: [350, 0], D08: [400, 0],
+    D09: [500, 0], D10: [600, 0], D11: [700, 0], D12: [800, 0], D13: [900, 0],
+    E01: [100, 200], E02: [100, 300], E03: [100, 400], E04: [100, 500], E05: [100, 600], E06: [100, 700], E07: [100, 800],
+    E08: [100, 900], E09: [100, 1000], E10: [100, 1100],
+    F01: [100, 100], F02: [125, 125], F03: [150, 0], F04: [150, 50], F05: [150, 100], F06: [150, 150], F07: [160, 200],
+    F08: [175, 250], F09: [200, 300], F10: [225, 350], F11: [250, 400],
+    G01: [450, 50], G02: [550, 100], G03: [650, 150], G04: [750, 200], G05: [850, 250],
+    J02: [-800, -50], J03: [-900, -100],
+    K01: [-150, 0], K02: [-100, 0], K03: [-75, 0], K04: [-50, 0], K05: [-350, -100], K06: [-400, -100], K07: [-450, -100],
+    K08: [-500, -100],
+    N01: [-350, 0], N02: [-400, 0], N03: [-450, 0], N04: [-500, 0], N06: [-600, 0], N07: [-700, 0], N08: [-800, 0],
+    N09: [-900, 0], N10: [-1000, 0], N11: [-1100, 0], N12: [-1200, 0]
+  };
+
+  /** Line sequences for drawing the map (station codes in order along each segment). */
+  var MAP_LINE_SEQUENCES = [
+    ['A15', 'A14', 'A13', 'A12', 'A11', 'A10', 'A09', 'A08', 'A07', 'A06', 'A05', 'A04', 'A03', 'A02', 'A01'],
+    ['B11', 'B10', 'B09', 'B08', 'B07', 'B06', 'B05', 'B04', 'B03', 'B02', 'B35', 'B01'],
+    ['C01', 'C02', 'C03', 'C04', 'C05'],
+    ['C06', 'C07', 'C08', 'C09', 'C10', 'C11', 'C12', 'C13', 'C14', 'C15'],
+    ['D01', 'D02', 'D03', 'D04', 'D05', 'D06', 'D07', 'D08', 'D09', 'D10', 'D11', 'D12', 'D13'],
+    ['E01', 'E02', 'E03', 'E04', 'E05', 'E06', 'E07', 'E08', 'E09', 'E10'],
+    ['F01', 'F02', 'F03', 'F04', 'F05', 'F06', 'F07', 'F08', 'F09', 'F10', 'F11'],
+    ['G01', 'G02', 'G03', 'G04', 'G05'],
+    ['J02', 'J03'],
+    ['K01', 'K02', 'K03', 'K04'],
+    ['K05', 'K06', 'K07', 'K08'],
+    ['N01', 'N02', 'N03', 'N04'],
+    ['N06', 'N07', 'N08', 'N09', 'N10', 'N11', 'N12']
+  ];
+
+  var MAP_VIEWBOX = { x: -1250, y: -750, w: 2350, h: 1950 };
+  var MAP_SVG_WIDTH = 2350;
+  var MAP_SVG_HEIGHT = 1950;
 
   var lineCodeToName = { RD: 'Red', BL: 'Blue', YL: 'Yellow', OR: 'Orange', GR: 'Green', SV: 'Silver' };
 
@@ -164,6 +211,20 @@
       .catch(function (err) { callback(err); });
   }
 
+  function populateStationSelect(stations) {
+    var sel = document.getElementById('station-select');
+    if (!sel || !stations || stations.length === 0) return;
+    var sorted = stations.slice().sort(function (a, b) {
+      return (a.Name || '').localeCompare(b.Name || '');
+    });
+    sorted.forEach(function (s) {
+      var opt = document.createElement('option');
+      opt.value = s.Code || '';
+      opt.textContent = s.Name || s.Code || '—';
+      sel.appendChild(opt);
+    });
+  }
+
   function findNearestStation(lat, lon, stations) {
     var nearest = null;
     var minDist = Infinity;
@@ -178,6 +239,20 @@
     return nearest;
   }
 
+  function setCurrentStationName(station) {
+    var el = document.getElementById('current-station-name');
+    if (!el) return;
+    el.textContent = (station.Name || station.Code || '').toUpperCase();
+    el.removeAttribute('hidden');
+  }
+
+  function clearCurrentStationName() {
+    var el = document.getElementById('current-station-name');
+    if (!el) return;
+    el.textContent = '';
+    el.setAttribute('hidden', '');
+  }
+
   function showSuccess(lat, lon) {
     resultErrorEl.setAttribute('hidden', '');
     resultErrorEl.removeAttribute('data-visible');
@@ -185,43 +260,68 @@
     resultEl.setAttribute('data-visible', 'true');
     content.setAttribute('data-state', 'success');
 
-    // fetchWeather(lat, lon, function (err, weather) {
-    //   var mastheadWeather = document.getElementById('masthead-weather');
-    //   var textEl = document.getElementById('masthead-weather-text');
-    //   if (err || !weather || !mastheadWeather || !textEl) return;
-    //   mastheadWeather.removeAttribute('hidden');
-    //   mastheadWeather.removeAttribute('aria-hidden');
-    //   setMastheadWeatherIcon(getWeatherIconKey(weather.weatherCode, weather.isNight));
-    //   var f = Math.round(celsiusToFahrenheit(weather.temperature));
-    //   textEl.textContent = weather.conditions + ', ' + f + ' °F';
-    // });
-
     fetchStations(function (err, stations) {
       if (err || !stations || stations.length === 0) return;
       var result = findNearestStation(lat, lon, stations);
       if (!result) return;
       nearestStation = result;
+      setCurrentStationName(result.station);
       fetchAndShowNextTrains(result.station);
     });
+  }
+
+  /** Show train times for a chosen station (from dropdown). */
+  function showSuccessForStation(station) {
+    resultErrorEl.setAttribute('hidden', '');
+    resultErrorEl.removeAttribute('data-visible');
+    resultEl.removeAttribute('hidden');
+    resultEl.setAttribute('data-visible', 'true');
+    content.setAttribute('data-state', 'success');
+    nearestStation = { station: station };
+    setCurrentStationName(station);
+    fetchAndShowNextTrains(station);
   }
 
   function fetchAndShowNextTrains(station) {
     var container = document.getElementById('result-next-trains');
     if (!container) return;
+    if (trainPollIntervalId) {
+      clearInterval(trainPollIntervalId);
+      trainPollIntervalId = null;
+    }
     var stationCodes = station.Code + (station.StationTogether1 ? ',' + station.StationTogether1 : '');
     var url = 'https://api.wmata.com/StationPrediction.svc/json/GetPrediction/' +
       encodeURIComponent(stationCodes) + '?api_key=' + encodeURIComponent(WMATA_API_KEY);
     fetch(url)
       .then(function (res) { return res.json(); })
       .then(function (data) {
-        var trains = (data.Trains || []).slice(0, 3);
+        var all = data.Trains || [];
+        var trains = all
+          .filter(function (t) {
+            var dest = (t.DestinationName || stationCodeToName[t.DestinationCode] || t.Destination || '').toUpperCase();
+            return dest !== 'NO PASSENGER';
+          })
+          .slice(0, 3);
         if (trains.length === 0) {
           container.innerHTML = '';
           container.setAttribute('hidden', '');
           return;
         }
         container.removeAttribute('hidden');
+        var firstMin = trains[0] && trains[0].Min;
+        var firstIsNumeric = firstMin && firstMin !== 'ARR' && firstMin !== 'BRD' && !isNaN(parseInt(firstMin, 10));
+        trainsViewHeadline = firstIsNumeric ? 'Next metro in:' : 'Next metro is:';
+        updateTrainsViewHeadline();
+
+        var oldBlocks = container.querySelectorAll('.next-train-block');
+        var oldStatusHtmls = [];
+        for (var b = 0; b < oldBlocks.length; b++) {
+          var minEl = oldBlocks[b].querySelector('.next-train-min');
+          if (minEl) oldStatusHtmls.push(minEl.innerHTML);
+        }
+
         var html = '';
+        var newStatusHtmls = [];
         trains.forEach(function (t, i) {
           var dest = (t.DestinationName || stationCodeToName[t.DestinationCode] || t.Destination || '—').toUpperCase();
           var lineInitial = (t.Line && t.Line.length > 0) ? String(t.Line).slice(0, 1).toUpperCase() : '—';
@@ -233,23 +333,39 @@
           else if (!minNum) { minNum = '—'; minLabel = ''; }
           else { isNumericMin = true; }
           var numClass = 'next-train-min-num' + (isNumericMin ? ' next-train-min-num--numeric' : '');
+          var minInner = '<span class="' + numClass + '">' + escapeHtml(String(minNum)) + '</span>';
+          if (minLabel) minInner += ' <span class="next-train-min-label">' + escapeHtml(minLabel) + '</span>';
+          newStatusHtmls.push(minInner);
           html += '<div class="next-train-block">';
-          html += '<div class="next-train-left">';
+          html += '<div class="next-train-stack">';
           html += '<p class="next-train-line-dest"><span class="next-train-line-circle">' + escapeHtml(lineInitial) + '</span><span class="next-train-dest">' + escapeHtml(dest) + '</span></p>';
-          html += '</div>';
-          html += '<div class="next-train-right">';
-          html += '<p class="next-train-min"><span class="' + numClass + '">' + escapeHtml(String(minNum)) + '</span>';
-          if (minLabel) html += ' <span class="next-train-min-label">' + escapeHtml(minLabel) + '</span>';
-          html += '</p>';
+          html += '<p class="next-train-min">' + minInner + '</p>';
           html += '</div>';
           if (i < trains.length - 1) html += '<hr class="next-train-divider">';
           html += '</div>';
         });
         container.innerHTML = html;
+
+        for (var j = 0; j < trains.length; j++) {
+          var oldText = oldStatusHtmls[j] !== undefined ? getStatusTextFromHtml(oldStatusHtmls[j]) : '';
+          var newText = getStatusTextFromHtml(newStatusHtmls[j]);
+          if (oldStatusHtmls[j] !== undefined && oldText !== newText) {
+            var blocks = container.querySelectorAll('.next-train-block');
+            var minEl = blocks[j] && blocks[j].querySelector('.next-train-min');
+            runTrainStatusSlide(minEl, oldStatusHtmls[j], newStatusHtmls[j], function () {});
+          }
+        }
+
+        trainPollIntervalId = setInterval(function () {
+          fetchAndShowNextTrains(station);
+        }, 15000);
       })
       .catch(function () {
         container.innerHTML = '';
         container.setAttribute('hidden', '');
+        trainPollIntervalId = setInterval(function () {
+          fetchAndShowNextTrains(station);
+        }, 15000);
       });
   }
 
@@ -265,6 +381,11 @@
   function clearState() {
     userLocation = null;
     nearestStation = null;
+    if (trainPollIntervalId) {
+      clearInterval(trainPollIntervalId);
+      trainPollIntervalId = null;
+    }
+    clearCurrentStationName();
     content.removeAttribute('data-state');
     resultEl.setAttribute('hidden', '');
     resultEl.removeAttribute('data-visible');
@@ -334,11 +455,13 @@
     var timeEl = document.getElementById('datetime-time');
     var dateEl = document.getElementById('datetime-date');
     if (timeEl) {
-      timeEl.textContent = now.toLocaleTimeString('en-US', {
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true
-      });
+      var h = now.getHours();
+      var m = String(now.getMinutes()).padStart(2, '0');
+      var s = String(now.getSeconds()).padStart(2, '0');
+      var h12 = h % 12;
+      if (h12 === 0) h12 = 12;
+      var ampm = h < 12 ? 'AM' : 'PM';
+      timeEl.textContent = String(h12).padStart(2, '0') + ':' + m + ':' + s + ' ' + ampm;
     }
     if (dateEl) {
       var weekday = now.toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase();
@@ -354,6 +477,61 @@
 
   var INCIDENTS_SLIDE_DURATION_MS = 400;
   var HEADLINE_SLIDE_HEIGHT = '1.2em';
+  var TRAIN_STATUS_SLIDE_HEIGHT = '5.5rem';
+
+  /** Normalize status HTML to comparable text so we detect real content changes. */
+  function getStatusTextFromHtml(html) {
+    var div = document.createElement('div');
+    div.innerHTML = html;
+    return (div.textContent || '').trim().replace(/\s+/g, ' ');
+  }
+
+  /** Slide animation for a single train status: old content slides up and out, new content slides up from below. */
+  function runTrainStatusSlide(minElement, oldHtml, newHtml, onComplete) {
+    if (!minElement) {
+      if (onComplete) onComplete();
+      return;
+    }
+    var viewport = document.createElement('div');
+    viewport.className = 'train-status-slide-viewport';
+    var strip = document.createElement('div');
+    strip.className = 'train-status-slide-strip';
+    var line1 = document.createElement('div');
+    line1.className = 'train-status-slide-line';
+    var line2 = document.createElement('div');
+    line2.className = 'train-status-slide-line';
+    line1.innerHTML = oldHtml;
+    line2.innerHTML = newHtml;
+    strip.appendChild(line1);
+    strip.appendChild(line2);
+    strip.style.transform = 'translateY(0)';
+    viewport.appendChild(strip);
+    minElement.innerHTML = '';
+    minElement.appendChild(viewport);
+    strip.offsetHeight;
+    strip.style.transform = 'translateY(-' + TRAIN_STATUS_SLIDE_HEIGHT + ')';
+    var done = function () {
+      strip.removeEventListener('transitionend', done);
+      requestAnimationFrame(function () {
+        minElement.innerHTML = newHtml;
+        if (onComplete) onComplete();
+      });
+    };
+    strip.addEventListener('transitionend', done);
+    setTimeout(function () {
+      if (strip.parentNode) done();
+    }, INCIDENTS_SLIDE_DURATION_MS + 50);
+  }
+
+  /** Updates the trains-view headline to trainsViewHeadline with slide animation if it changed. */
+  function updateTrainsViewHeadline() {
+    var wrap = document.getElementById('headline-slide-wrap');
+    if (!wrap) return;
+    var headlineEl = document.getElementById('headline') || wrap.querySelector('.headline');
+    var current = (headlineEl && headlineEl.textContent.trim()) || 'Next metro in:';
+    if (current === trainsViewHeadline) return;
+    runHeadlineSlide(current, trainsViewHeadline, 'up', function () {});
+  }
 
   function runHeadlineSlide(outgoingText, incomingText, direction, onComplete) {
     var wrap = document.getElementById('headline-slide-wrap');
@@ -396,13 +574,15 @@
     strip.style.transform = slideUp ? 'translateY(-' + HEADLINE_SLIDE_HEIGHT + ')' : 'translateY(0)';
     var done = function () {
       strip.removeEventListener('transitionend', done);
-      var finalH1 = document.createElement('h1');
-      finalH1.className = 'headline';
-      finalH1.id = 'headline';
-      finalH1.textContent = incomingText;
-      wrap.innerHTML = '';
-      wrap.appendChild(finalH1);
-      if (onComplete) onComplete();
+      requestAnimationFrame(function () {
+        var finalH1 = document.createElement('h1');
+        finalH1.className = 'headline';
+        finalH1.id = 'headline';
+        finalH1.textContent = incomingText;
+        wrap.innerHTML = '';
+        wrap.appendChild(finalH1);
+        if (onComplete) onComplete();
+      });
     };
     strip.addEventListener('transitionend', done);
     setTimeout(function () {
@@ -441,8 +621,10 @@
     strip.style.transform = slideUp ? 'translateY(-1.4em)' : 'translateY(0)';
     var done = function () {
       strip.removeEventListener('transitionend', done);
-      container.innerHTML = incomingHtml;
-      if (onComplete) onComplete();
+      requestAnimationFrame(function () {
+        container.innerHTML = incomingHtml;
+        if (onComplete) onComplete();
+      });
     };
     strip.addEventListener('transitionend', done);
     setTimeout(function () {
@@ -494,7 +676,7 @@
       '<span class="incidents-icon" aria-hidden="true">' + incidentsTriangleSvg + '</span>' +
       '<span class="incidents-count">' + escapeHtml(String(incidentsList.length)) + ' INCIDENTS</span>' +
       '</button>';
-    runHeadlineSlide('Incidents:', 'Next metro in:', 'down', function () {});
+    runHeadlineSlide('Incidents:', trainsViewHeadline, 'down', function () {});
     runIncidentsSlide(container, outgoingHtml, incomingHtml, 'down', function () {
       var incidentsBtn = document.getElementById('masthead-incidents-btn');
       if (incidentsBtn) incidentsBtn.addEventListener('click', showIncidentsView);
@@ -571,18 +753,39 @@
     iconEl.innerHTML = isDark ? sunSvg : moonSvg;
   }
 
-  var sliderPosition = 0;
-  var SLIDER_DEFAULT_HSL_LIGHT = { h: 15, s: 100, l: 96 };
-  var SLIDER_DEFAULT_HSL_DARK = { h: 0, s: 8, l: 10 };
+  var PLEASING_HUES_LIGHT = [
+    { h: 15, s: 100, l: 96 },
+    { h: 270, s: 40, l: 96 },
+    { h: 150, s: 40, l: 95 },
+    { h: 200, s: 50, l: 95 },
+    { h: 350, s: 50, l: 96 },
+    { h: 45, s: 70, l: 95 },
+    { h: 120, s: 25, l: 94 },
+    { h: 320, s: 45, l: 95 },
+    { h: 180, s: 35, l: 94 }
+  ];
+  var PLEASING_HUES_DARK = [
+    { h: 15, s: 20, l: 12 },
+    { h: 270, s: 15, l: 11 },
+    { h: 150, s: 15, l: 11 },
+    { h: 200, s: 18, l: 12 },
+    { h: 350, s: 18, l: 11 },
+    { h: 45, s: 22, l: 12 },
+    { h: 120, s: 12, l: 11 },
+    { h: 320, s: 16, l: 11 },
+    { h: 180, s: 14, l: 11 }
+  ];
 
-  function applySliderToBackground() {
+  function applyColorfulBackground() {
     var body = document.body;
     if (!body) return;
     var isDark = body.getAttribute('data-theme') === 'dark';
-    var h = isDark ? (SLIDER_DEFAULT_HSL_DARK.h + sliderPosition * 360) % 360 : (SLIDER_DEFAULT_HSL_LIGHT.h + sliderPosition * 360) % 360;
-    var s = isDark ? SLIDER_DEFAULT_HSL_DARK.s : SLIDER_DEFAULT_HSL_LIGHT.s;
-    var l = isDark ? SLIDER_DEFAULT_HSL_DARK.l : SLIDER_DEFAULT_HSL_LIGHT.l;
-    body.style.backgroundColor = 'hsl(' + Math.round(h) + ', ' + s + '%, ' + l + '%)';
+    var pal = isDark ? PLEASING_HUES_DARK : PLEASING_HUES_LIGHT;
+    var c = pal[Math.floor(Math.random() * pal.length)];
+    var newColor = 'hsl(' + c.h + ', ' + c.s + '%, ' + c.l + '%)';
+    body.setAttribute('data-colorful', 'true');
+    body.style.setProperty('--current-bg', newColor);
+    body.style.backgroundColor = newColor;
   }
 
   function applyTheme(theme) {
@@ -593,8 +796,10 @@
     } else {
       body.removeAttribute('data-theme');
     }
+    body.removeAttribute('data-colorful');
+    body.style.backgroundColor = '';
+    body.style.removeProperty('--current-bg');
     updateFlipLightsIcon();
-    applySliderToBackground();
   }
 
   function toggleTheme() {
@@ -606,6 +811,156 @@
     } catch (e) {}
   }
 
+  function buildMetroMapSvg() {
+    var vb = MAP_VIEWBOX;
+    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', vb.x + ' ' + vb.y + ' ' + vb.w + ' ' + vb.h);
+    svg.setAttribute('width', String(MAP_SVG_WIDTH));
+    svg.setAttribute('height', String(MAP_SVG_HEIGHT));
+    svg.setAttribute('class', 'wmata-map-svg');
+    svg.setAttribute('aria-hidden', 'true');
+
+    var defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    var style = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+    style.textContent = '.wmata-map-line { fill: none; stroke: currentColor; stroke-width: 8; stroke-linecap: round; stroke-linejoin: round; } .wmata-map-station { fill: currentColor; }';
+    defs.appendChild(style);
+    svg.appendChild(defs);
+
+    var gLines = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    gLines.setAttribute('class', 'wmata-map-lines');
+    MAP_LINE_SEQUENCES.forEach(function (codes) {
+      var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      var d = '';
+      codes.forEach(function (code, i) {
+        var pt = STATION_COORDINATES[code];
+        if (!pt) return;
+        var cmd = i === 0 ? 'M' : 'L';
+        d += cmd + pt[0] + ',' + pt[1] + ' ';
+      });
+      path.setAttribute('d', d.trim());
+      path.setAttribute('class', 'wmata-map-line');
+      gLines.appendChild(path);
+    });
+    svg.appendChild(gLines);
+
+    var gStations = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    gStations.setAttribute('class', 'wmata-map-stations');
+    Object.keys(STATION_COORDINATES).forEach(function (code) {
+      var pt = STATION_COORDINATES[code];
+      var circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      circle.setAttribute('cx', String(pt[0]));
+      circle.setAttribute('cy', String(pt[1]));
+      circle.setAttribute('r', '12');
+      circle.setAttribute('class', 'wmata-map-station');
+      gStations.appendChild(circle);
+    });
+    svg.appendChild(gStations);
+
+    return svg;
+  }
+
+  var MAP_CONTENT_WIDTH = 1100;
+  var MAP_CONTENT_HEIGHT = 800;
+
+  function initMapPanZoom() {
+    var viewport = document.getElementById('wmata-map-viewport');
+    var inner = document.getElementById('wmata-map-inner');
+    if (!viewport || !inner) return;
+
+    var scale = 0.24;
+    var panX = 0;
+    var panY = 0;
+    var minScale = 0.12;
+    var maxScale = 2;
+    var isDragging = false;
+    var startX = 0;
+    var startY = 0;
+    var startPanX = 0;
+    var startPanY = 0;
+    var lastViewportWidth = 0;
+    var lastViewportHeight = 0;
+
+    function applyTransform() {
+      inner.style.transform = 'translate(' + panX + 'px,' + panY + 'px) scale(' + scale + ')';
+    }
+
+    function fitMapToViewport() {
+      var rect = viewport.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+      var scaleToFit = Math.min(rect.width / MAP_CONTENT_WIDTH, rect.height / MAP_CONTENT_HEIGHT);
+      scale = Math.min(maxScale, Math.max(minScale, scaleToFit));
+      panX = (rect.width - MAP_CONTENT_WIDTH * scale) / 2;
+      panY = (rect.height - MAP_CONTENT_HEIGHT * scale) / 2;
+      lastViewportWidth = rect.width;
+      lastViewportHeight = rect.height;
+      applyTransform();
+    }
+
+    function adjustMapForResize() {
+      var rect = viewport.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+      if (lastViewportWidth <= 0 || lastViewportHeight <= 0) {
+        fitMapToViewport();
+        return;
+      }
+      var contentCenterX = (lastViewportWidth / 2 - panX) / scale;
+      var contentCenterY = (lastViewportHeight / 2 - panY) / scale;
+      panX = rect.width / 2 - contentCenterX * scale;
+      panY = rect.height / 2 - contentCenterY * scale;
+      lastViewportWidth = rect.width;
+      lastViewportHeight = rect.height;
+      applyTransform();
+    }
+
+    viewport.addEventListener('wheel', function (e) {
+      e.preventDefault();
+      var rect = viewport.getBoundingClientRect();
+      var mx = e.clientX - rect.left;
+      var my = e.clientY - rect.top;
+      var contentX = (mx - panX) / scale;
+      var contentY = (my - panY) / scale;
+      var factor = e.deltaY > 0 ? 0.9 : 1.1;
+      var newScale = Math.min(maxScale, Math.max(minScale, scale * factor));
+      panX = mx - contentX * newScale;
+      panY = my - contentY * newScale;
+      scale = newScale;
+      applyTransform();
+    }, { passive: false });
+
+    viewport.addEventListener('pointerdown', function (e) {
+      if (e.button !== 0) return;
+      isDragging = true;
+      startX = e.clientX;
+      startY = e.clientY;
+      startPanX = panX;
+      startPanY = panY;
+      viewport.setPointerCapture(e.pointerId);
+    });
+
+    viewport.addEventListener('pointermove', function (e) {
+      if (!isDragging) return;
+      panX = startPanX + (e.clientX - startX);
+      panY = startPanY + (e.clientY - startY);
+      applyTransform();
+    });
+
+    viewport.addEventListener('pointerup', function (e) {
+      if (e.button !== 0) return;
+      isDragging = false;
+      viewport.releasePointerCapture(e.pointerId);
+    });
+
+    viewport.addEventListener('pointercancel', function () {
+      isDragging = false;
+    });
+
+    window.addEventListener('resize', function () {
+      requestAnimationFrame(adjustMapForResize);
+    });
+
+    requestAnimationFrame(function () { fitMapToViewport(); });
+  }
+
   function init() {
     updateDateTime();
     setInterval(updateDateTime, 1000);
@@ -615,16 +970,10 @@
       else updateFlipLightsIcon();
     } catch (e) {}
     fetchIncidents();
-    // fetchWeather(DEFAULT_WEATHER_LAT, DEFAULT_WEATHER_LON, function (err, weather) {
-    //   var mastheadWeather = document.getElementById('masthead-weather');
-    //   var textEl = document.getElementById('masthead-weather-text');
-    //   if (err || !weather || !mastheadWeather || !textEl) return;
-    //   mastheadWeather.removeAttribute('hidden');
-    //   mastheadWeather.removeAttribute('aria-hidden');
-    //   setMastheadWeatherIcon(getWeatherIconKey(weather.weatherCode, weather.isNight));
-    //   var f = Math.round(celsiusToFahrenheit(weather.temperature));
-    //   textEl.textContent = weather.conditions + ', ' + f + ' °F';
-    // });
+    initMapPanZoom();
+    fetchStations(function (err, stations) {
+      if (!err && stations) populateStationSelect(stations);
+    });
     tryRestoreLocation();
   }
 
@@ -645,69 +994,38 @@
     });
   }
 
-  (function initBgSliderPill() {
-    var pill = document.getElementById('bg-slider-pill');
-    var track = document.querySelector('.masthead-rule');
-    if (!pill || !track) return;
-
-    var pillActive = false;
-    var PILL_SCALE_ACTIVE = 1.14;
-
-    function updatePillTransform() {
-      var scale = pillActive ? PILL_SCALE_ACTIVE : 1;
-      pill.style.transform = 'translateX(-50%) scale(' + scale + ')';
-    }
-
-    function setPosition(pos) {
-      sliderPosition = Math.max(0, Math.min(1, pos));
-      pill.style.left = (sliderPosition * 100) + '%';
-      updatePillTransform();
-      pill.setAttribute('aria-valuenow', Math.round(sliderPosition * 100));
-      applySliderToBackground();
-    }
-
-    function onMove(clientX) {
-      var rect = track.getBoundingClientRect();
-      setPosition((clientX - rect.left) / rect.width);
-    }
-
-    function onPointerDown(e) {
-      e.preventDefault();
-      pillActive = true;
-      updatePillTransform();
-      onMove(e.clientX);
-      function onPointerMove(ev) {
-        onMove(ev.clientX);
-      }
-      function onPointerUp() {
-        pillActive = false;
-        updatePillTransform();
-        document.removeEventListener('pointermove', onPointerMove);
-        document.removeEventListener('pointerup', onPointerUp);
-        document.removeEventListener('pointercancel', onPointerUp);
-      }
-      document.addEventListener('pointermove', onPointerMove);
-      document.addEventListener('pointerup', onPointerUp);
-      document.addEventListener('pointercancel', onPointerUp);
-    }
-
-    pill.addEventListener('pointerdown', onPointerDown);
-
-    pill.addEventListener('keydown', function (e) {
-      var step = 0.05;
-      if (e.key === 'ArrowLeft') {
+  var colorfulBtn = document.getElementById('colorful-btn');
+  if (colorfulBtn) {
+    colorfulBtn.addEventListener('click', applyColorfulBackground);
+    colorfulBtn.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        setPosition(sliderPosition - step);
-      } else if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        setPosition(sliderPosition + step);
+        applyColorfulBackground();
       }
     });
-
-    setPosition(0);
-  })();
+  }
 
   if (allowBtn) allowBtn.addEventListener('click', requestLocation);
+
+  var checkStationBtn = document.getElementById('check-station');
+  if (checkStationBtn) {
+    checkStationBtn.addEventListener('click', function () {
+      var sel = document.getElementById('station-select');
+      var code = sel && sel.value ? sel.value.trim() : '';
+      if (!code) return;
+      if (!stationsCache) {
+        fetchStations(function (err, stations) {
+          if (err || !stations) return;
+          var station = stations.filter(function (s) { return (s.Code || '') === code; })[0];
+          if (station) showSuccessForStation(station);
+        });
+        return;
+      }
+      var station = stationsCache.filter(function (s) { return (s.Code || '') === code; })[0];
+      if (station) showSuccessForStation(station);
+    });
+  }
+
   if (tryAgainBtn) {
     tryAgainBtn.addEventListener('click', function () {
       clearState();

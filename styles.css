@@ -22,6 +22,9 @@
   --sbb-radius: 4px;
   --theme-transition: 0.8s cubic-bezier(0.4, 0, 0.2, 1);
   --theme-transition-colors: background-color var(--theme-transition), color var(--theme-transition), border-color var(--theme-transition);
+  --page-bg-transition: var(--theme-transition);
+  /* Single transition string so theme/colorful changes stay in sync everywhere */
+  --sync-transition: background-color var(--page-bg-transition), color var(--theme-transition), border-color var(--theme-transition), opacity var(--theme-transition);
 }
 
 /* Dark mode */
@@ -65,15 +68,19 @@ body {
   color: var(--sbb-charcoal);
   background-color: var(--sbb-bg);
   min-height: 100vh;
-  transition: var(--theme-transition-colors);
+  transition: var(--sync-transition);
   display: flex;
   flex-direction: column;
   align-items: center;
   padding: 0 1.5rem 1.5rem;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 /* Masthead – date/time left (date on top, time below), title right, vertically centered */
 .masthead {
+  position: relative;
+  z-index: 1;
   width: 100%;
   display: flex;
   flex-wrap: wrap;
@@ -84,15 +91,16 @@ body {
 }
 
 .masthead-rule {
+  position: relative;
   display: flex;
   align-items: center;
   flex-basis: 100%;
   width: 100%;
+  min-height: 2em;
   margin-top: -0.5rem;
   padding-top: 1rem;
   gap: 0.5rem;
   font-size: 0.875rem;
-  position: relative;
 }
 
 .masthead-rule-icon {
@@ -124,40 +132,64 @@ body {
   transition: border-bottom-color var(--theme-transition);
 }
 
-.masthead-rule-pill {
+.masthead-rule-caption {
   position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 24px;
-  height: 10px;
-  margin-bottom: -1px;
-  background-color: #212121;
-  border-radius: 999px;
-  cursor: grab;
-  touch-action: none;
-  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.15s ease;
-  transform-origin: center center;
+  left: 50%;
+  top: 50%;
+  /* Align caption center with the dashed line’s vertical center (line is border-bottom of flex-centered rule-line) */
+  transform: translate(-50%, calc(-50% + 0.5em));
+  padding: 0 0.5em;
+  margin: 0;
+  border: none;
+  background-color: var(--current-bg, var(--sbb-bg));
+  font-family: var(--sbb-font);
+  font-size: 0.875rem;
+  font-style: italic;
+  color: inherit;
+  cursor: pointer;
+  transition: var(--sync-transition);
 }
 
-.masthead-rule-pill:hover {
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.15);
+.masthead-rule-caption:hover {
+  text-decoration: underline;
 }
 
-.masthead-rule-pill:active {
-  cursor: grabbing;
+body[data-colorful="true"] {
+  --page-bg-transition: 1.4s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: var(--sync-transition);
 }
 
-body[data-theme="dark"] .masthead-rule-pill {
-  background-color: #e8e8e8;
+/* First line of left column: station name and time (HH:MM:SS) on same line */
+.datetime-first-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  flex-wrap: wrap;
 }
 
-body[data-theme="dark"] .masthead-rule-pill:hover {
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2);
+/* Current station name (left side, in line with date when a station is selected) */
+.current-station-name {
+  font-family: var(--sbb-body-font);
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: inherit;
+  margin: 0;
+  transition: var(--sync-transition);
+}
+
+/* Right column: headline (right-aligned); left column = .datetime */
+.masthead-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
 }
 
 .headline-slide-wrap {
   position: relative;
   font-size: 3.5rem;
+  min-height: 1.2em;
 }
 
 .headline-slide-viewport {
@@ -196,8 +228,9 @@ body[data-theme="dark"] .masthead-rule-pill:hover {
   transition: color var(--theme-transition);
 }
 
-/* Date/time in masthead, far left, sans serif */
+/* Date/time and statuses in masthead, left side, left-aligned */
 .datetime {
+  text-align: left;
   font-family: system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
   font-size: 0.875rem;
   font-weight: 400;
@@ -212,6 +245,18 @@ body[data-theme="dark"] .masthead-rule-pill:hover {
 
 .datetime {
   position: relative;
+}
+
+.datetime-time-date-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.datetime-sep {
+  font-weight: 400;
+  opacity: 0.8;
 }
 
 .datetime-time {
@@ -435,14 +480,93 @@ body[data-theme="dark"] .masthead-rule-pill:hover {
 
 /* Page load animation */
 .page {
+  position: relative;
+  z-index: 1;
   opacity: 0;
   transform: translateY(12px);
   animation: pageIn 500ms ease-out forwards;
   flex: 1;
   width: 100%;
+  min-height: 0;
   display: flex;
-  justify-content: center;
+  flex-direction: row;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 0.5rem;
   padding-top: 2rem;
+  padding-left: 0;
+}
+
+.wmata-map-wrap {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding-left: 1.5rem;
+}
+
+.wmata-map-viewport {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  position: relative;
+}
+
+.wmata-map-viewport:active {
+  cursor: grabbing;
+}
+
+.wmata-map-inner {
+  width: 1100px;
+  height: 800px;
+  position: relative;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.wmata-map-svg {
+  display: block;
+  width: 1100px;
+  height: 800px;
+  pointer-events: none;
+  user-select: none;
+  color: inherit;
+  opacity: 0.85;
+  transition: var(--sync-transition);
+}
+
+body[data-theme="dark"] .wmata-map-svg {
+  opacity: 0.55;
+}
+
+/* Animated dots on the map (metro cars) – white on top of lines */
+.wmata-map-svg .metro-car {
+  fill: #fff;
+  animation: metroCarPulse 2.5s ease-in-out infinite;
+}
+.metro-car--1 { animation-delay: 0s; }
+.metro-car--2 { animation-delay: 0.17s; }
+.metro-car--3 { animation-delay: 0.34s; }
+.metro-car--4 { animation-delay: 0.51s; }
+.metro-car--5 { animation-delay: 0.68s; }
+.metro-car--6 { animation-delay: 0.85s; }
+.metro-car--7 { animation-delay: 1.02s; }
+.metro-car--8 { animation-delay: 1.19s; }
+.metro-car--9 { animation-delay: 1.36s; }
+.metro-car--10 { animation-delay: 1.53s; }
+.metro-car--11 { animation-delay: 1.7s; }
+.metro-car--12 { animation-delay: 1.87s; }
+.metro-car--13 { animation-delay: 2.04s; }
+.metro-car--14 { animation-delay: 2.21s; }
+.metro-car--15 { animation-delay: 2.38s; }
+
+@keyframes metroCarPulse {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 0.9; }
 }
 
 @keyframes pageIn {
@@ -453,8 +577,18 @@ body[data-theme="dark"] .masthead-rule-pill:hover {
 }
 
 .content {
+  flex: 1;
+  min-width: 0;
   max-width: 520px;
   width: 100%;
+}
+
+.content[data-state="success"] {
+  flex: 0 0 auto;
+  width: max-content;
+  max-width: 520px;
+  margin-left: auto;
+  padding-left: 0;
 }
 
 .lead {
@@ -468,7 +602,11 @@ body[data-theme="dark"] .masthead-rule-pill:hover {
 }
 
 .content[data-state="success"] .lead,
-.content[data-state="error"] .lead {
+.content[data-state="error"] .lead,
+.content[data-state="success"] .or-divider,
+.content[data-state="error"] .or-divider,
+.content[data-state="success"] .station-picker,
+.content[data-state="error"] .station-picker {
   display: none;
 }
 
@@ -483,6 +621,85 @@ body[data-theme="dark"] .masthead-rule-pill:hover {
   opacity: 0;
   transform: translateY(8px);
   animation: textReveal 400ms ease-out 300ms forwards;
+}
+
+/* OR divider – horizontal rule interrupted by "OR" */
+.or-divider {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  margin: 2rem 0;
+  gap: 0.75rem;
+}
+.or-divider-line {
+  flex: 1;
+  min-width: 0;
+  border-bottom: 1px dashed rgba(33, 33, 33, 0.6);
+  transition: border-bottom-color var(--theme-transition);
+}
+body[data-theme="dark"] .or-divider-line {
+  border-bottom-color: rgba(232, 232, 232, 0.5);
+}
+.or-divider-caption {
+  font-family: var(--sbb-heading-font);
+  font-style: italic;
+  font-size: 1rem;
+  color: var(--sbb-charcoal);
+  transition: color var(--theme-transition);
+  flex-shrink: 0;
+}
+body[data-theme="dark"] .or-divider-caption {
+  color: var(--sbb-off-white);
+}
+
+/* Station picker */
+.station-picker {
+  opacity: 0;
+  transform: translateY(8px);
+  animation: textReveal 400ms ease-out 400ms forwards;
+}
+.station-picker-label {
+  margin: 0 0 0.75rem;
+  font-family: var(--sbb-body-font);
+  font-size: 1rem;
+  color: var(--sbb-charcoal);
+  transition: color var(--theme-transition);
+}
+body[data-theme="dark"] .station-picker-label {
+  color: var(--sbb-off-white);
+}
+.station-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.station-select {
+  flex: 1;
+  min-width: 0;
+  max-width: 100%;
+  font-family: var(--sbb-body-font);
+  font-size: 1rem;
+  padding: 0.5rem 0.75rem;
+  color: var(--sbb-charcoal);
+  background-color: transparent;
+  border: 1px solid rgba(33, 33, 33, 0.4);
+  border-radius: 0;
+  transition: border-color var(--theme-transition), color var(--theme-transition);
+}
+.station-select:focus {
+  outline: none;
+  border-color: var(--sbb-charcoal);
+}
+body[data-theme="dark"] .station-select {
+  color: var(--sbb-off-white);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+body[data-theme="dark"] .station-select:focus {
+  border-color: var(--sbb-off-white);
+}
+.btn-check {
+  flex-shrink: 0;
 }
 
 /* Primary button – monochromatic newspaper */
@@ -557,11 +774,6 @@ body[data-theme="dark"] .masthead-rule-pill:hover {
   padding: 0;
   background: none;
   border: none;
-  width: 100vw;
-  margin-left: calc(-50vw + 50%);
-  padding-left: 3rem;
-  padding-right: 1.5rem;
-  box-sizing: border-box;
   transition: opacity 0.2s ease-out;
 }
 
@@ -599,10 +811,6 @@ body[data-theme="dark"] .masthead-rule-pill:hover {
 }
 
 .next-train-block {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: start;
-  gap: 1rem;
   margin-bottom: 1rem;
 }
 
@@ -610,18 +818,23 @@ body[data-theme="dark"] .masthead-rule-pill:hover {
   margin-bottom: 0;
 }
 
-.next-train-left {
-  text-align: left;
-  min-width: 0;
+.next-train-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+  gap: 0.25rem;
 }
 
-.next-train-right {
-  text-align: right;
-  justify-self: end;
-}
 
 .next-train-min {
+  width: 100%;
+  min-height: 5.5rem;
   margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  white-space: nowrap;
   font-family: "Playfair Display", Georgia, serif;
   font-size: 1.25rem;
   font-style: italic;
@@ -660,10 +873,43 @@ body[data-theme="dark"] .masthead-rule-pill:hover {
   text-transform: uppercase;
 }
 
+/* Train status slide animation (old up, new from below) */
+.train-status-slide-viewport {
+  display: block;
+  width: 100%;
+  height: 5.5rem;
+  overflow: hidden;
+  position: relative;
+}
+
+.train-status-slide-strip {
+  width: 100%;
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.train-status-slide-line {
+  width: 100%;
+  height: 5.5rem;
+  min-height: 5.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  white-space: nowrap;
+  font-family: inherit;
+  font-size: inherit;
+  font-style: inherit;
+}
+
+.train-status-slide-line .next-train-min-num,
+.train-status-slide-line .next-train-min-label {
+  font-family: "Playfair Display", Georgia, serif;
+}
+
 .next-train-line-dest {
   margin: 0;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 0.5rem;
 }
 
@@ -703,7 +949,7 @@ body[data-theme="dark"] .masthead-rule-pill:hover {
   max-width: 100%;
 }
 
-/* Hide actions when result is shown */
+/* Hide actions and station picker when result is shown */
 .content[data-state="success"] .actions,
 .content[data-state="error"] .actions {
   display: none;
